@@ -1,0 +1,44 @@
+name: Refresh profile images
+
+on:
+  schedule:
+    - cron: '17 3 * * *'   # daily, 03:17 UTC
+  workflow_dispatch:         # "Run workflow" button in the Actions tab
+  push:
+    branches: [main]
+    paths: ['scripts/**', '.github/workflows/refresh.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install fonttools
+
+      - run: python scripts/build.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit changed images
+        run: |
+          git add assets
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Refresh profile images"
+          git push
