@@ -240,9 +240,10 @@ def build_button(name, ic, text, filled):
 
 def build_section(name, title):
     s = Svg(W, 34, title)
-    s.text(0, 22, title, 's5', 18)
+    # No card behind these, so use colors that read on GitHub's light and dark themes.
+    s.text(0, 22, title, 's5', 18, SKY2)
     x = width(title, 's5', 18) + 10
-    s.add(f'<rect x="{x:.2f}" y="16" width="{W - x:.2f}" height="1" fill="{RULE}"/>')
+    s.add(f'<rect x="{x:.2f}" y="16" width="{W - x:.2f}" height="1" fill="{SKY2}" fill-opacity="0.35"/>')
     s.save(name)
 
 
