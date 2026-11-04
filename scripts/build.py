@@ -87,7 +87,7 @@ class Svg:
             opts = subset.Options()
             opts.flavor = 'woff'
             opts.layout_features = ['kern', 'liga']
-            font = TTFont(os.path.join(HERE, 'fonts', file))
+            font = TTFont(os.path.join(HERE, 'fonts', file), recalcTimestamp=False)  # keep output stable
             sub = subset.Subsetter(opts)
             sub.populate(text=''.join(sorted(chars)) + ' ')
             sub.subset(font)
@@ -475,14 +475,15 @@ def build_ptd():
     label(c, 37, 27, 'PWNTILLDAWN')
     stat_row(c, 16, 70, [(f'#{n(country.group(1))}', cname), (machines.group(1), 'machines'),
                          (fmt(n(field.group(3))), 'points')], gap=18)
-    stat_row(c, 16, 122, [(f'#{fmt(n(field.group(1)))}', 'battlefield rank'),
-                          (fmt(n(field.group(2))), 'players')], gap=18)
+    stat_row(c, 16, 122, [(f'#{fmt(n(field.group(1)))}', 'battlefield rank')], gap=18)
     c.save('ctf-ptd.svg')
 
 
 def build_cylabs():
     d = json.loads(get(f'https://learn.cylabacademy.org/api/users/{CFG["cylabs"]}/'))
     events = d.get('event_participation') or []
+    gym = json.loads(get(f'https://learn.cylabacademy.org/api/users/{d["id"]}/gym_stats/'))
+    solved = gym['overall']['solved']
     c = Svg(THIRD, CTF_H, 'CyLab Academy stats')
     card(c, THIRD, CTF_H)
     c.add(icon('school', 16, 15, 15, SKY))
@@ -493,7 +494,7 @@ def build_cylabs():
                          (fmt(sum(e.get('individual_score') or 0 for e in events)), 'points')], gap=18)
     joined = dt.date.fromisoformat(d['date_joined']) if d.get('date_joined') else None
     stat_row(c, 16, 122, [(f'{joined:%b %Y}' if joined else '-', 'joined'),
-                          (str(d.get('max_streak') or 0), 'max streak')], gap=18)
+                          (fmt(solved), 'challenges solved')], gap=18)
     c.save('ctf-cylabs.svg')
 
 
