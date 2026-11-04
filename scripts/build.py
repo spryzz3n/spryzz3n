@@ -4,12 +4,12 @@ Run it with:  python scripts/build.py
 Needs:        pip install fonttools
 Optional:     GITHUB_TOKEN in the environment for higher GitHub API limits.
 
-Text, links and repos come from scripts/config.json. Live data (repos, GitHub
-stats, PwnTillDawn, CyLab Academy, TryHackMe) is fetched on every run. If a
+Text, links and repos come from scripts/config.json. Live data (repos and
+GitHub stats) is fetched on every run. If a
 source fails, its image is left as it was, so the README never shows a broken
 card, just the last good one.
 """
-import base64, datetime as dt, html, io, json, os, re, shutil, subprocess, sys, tempfile, traceback
+import base64, datetime as dt, io, json, os, re, sys, traceback
 import urllib.request
 from collections import Counter
 from xml.sax.saxutils import escape
@@ -28,7 +28,7 @@ LINE, PILL_LINE, BAND, BAND_LINE, RULE = '#d6e6f3', '#bcd8ee', '#f1f7fd', '#e1ed
 HEAT = ['#eef4f9', '#cfe6f7', '#94c9ee', '#4fa9e4', '#1a7cc4']
 LANG = ['#1a7cc4', '#2b9be0', '#4fa9e4', '#94c9ee', '#cfe6f7', '#e4eef6']
 W, P = 840, 26          # full-width image size and card padding
-HALF, THIRD = 412, 272  # card widths for 2- and 3-across rows
+HALF = 412              # card width for 2-across rows
 
 # ------------------------------------------------------------------ fonts & drawing
 FONTS = {
@@ -455,93 +455,6 @@ def build_activity(days):
     a.save('activity.svg')
 
 
-# ------------------------------------------------------------------ live: CTF cards
-CTF_H = 158
-
-
-def build_ptd():
-    page = get(CFG['pwntilldawn'])
-    machines = re.search(r'>\s*(\d+)\s*</h5>\s*<span class="description-text">\s*PWNED MACHINES', page)
-    field = re.search(r'<span[^>]*>\s*([\d,]+)\s*</span>\s*/\s*([\d,]+)\s*\(<small>\s*([\d,]+)\s*points\s*'
-                      r'</small>\)\s*</h5>\s*<span class="description-text">\s*BATTLEFIELD RANK', page)
-    country = re.search(r'BATTLEFIELD RANK[\s\S]*?<span[^>]*>\s*#([\d,]+)\s*</span>\s*</h5>\s*'
-                        r'<span class="description-text">\s*([^<]+?)\s*</span>', page)
-    if not (machines and field and country):
-        raise RuntimeError('could not read PwnTillDawn stats')
-    n = lambda s: int(s.replace(',', ''))
-    cname = html.unescape(country.group(2)).strip().title()
-    c = Svg(THIRD, CTF_H, 'PwnTillDawn stats')
-    card(c, THIRD, CTF_H)
-    c.add(icon('swords', 16, 15, 15, SKY))
-    label(c, 37, 27, 'PWNTILLDAWN')
-    stat_row(c, 16, 70, [(f'#{n(country.group(1))}', cname), (machines.group(1), 'machines'),
-                         (fmt(n(field.group(3))), 'points')], gap=18)
-    stat_row(c, 16, 122, [(f'#{fmt(n(field.group(1)))}', 'battlefield rank')], gap=18)
-    c.save('ctf-ptd.svg')
-
-
-def build_cylabs():
-    d = json.loads(get(f'https://learn.cylabacademy.org/api/users/{CFG["cylabs"]}/'))
-    events = d.get('event_participation') or []
-    gym = json.loads(get(f'https://learn.cylabacademy.org/api/users/{d["id"]}/gym_stats/'))
-    solved = gym['overall']['solved']
-    c = Svg(THIRD, CTF_H, 'CyLab Academy stats')
-    card(c, THIRD, CTF_H)
-    c.add(icon('school', 16, 15, 15, SKY))
-    label(c, 37, 27, 'CYLAB ACADEMY')
-    ranks = [e['rank'] for e in events if e.get('rank')]
-    stat_row(c, 16, 70, [(str(len(events)), 'events'),
-                         (f'#{fmt(min(ranks))}' if ranks else '-', 'best rank'),
-                         (fmt(sum(e.get('individual_score') or 0 for e in events)), 'points')], gap=18)
-    joined = dt.date.fromisoformat(d['date_joined']) if d.get('date_joined') else None
-    stat_row(c, 16, 122, [(f'{joined:%b %Y}' if joined else '-', 'joined'),
-                          (fmt(solved), 'challenges solved')], gap=18)
-    c.save('ctf-cylabs.svg')
-
-
-def browser():
-    """Path to a Chromium-based browser: $CHROME, or the usual install names."""
-    cands = [os.environ.get('CHROME'), 'google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser',
-             r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe',
-             r'C:\Program Files\Google\Chrome\Application\chrome.exe']
-    for c in cands:
-        if c and (shutil.which(c) or os.path.exists(c)):
-            return shutil.which(c) or c
-    raise RuntimeError('no Chrome or Edge found for the TryHackMe badge')
-
-
-def build_thm():
-    """TryHackMe's live badge. Their site only serves it to real browsers, so we
-    load it in headless Chrome, check it rendered, and screenshot it."""
-    url, exe = CFG['tryhackme_badge'], browser()
-    flags = ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', '--no-first-run',
-             '--virtual-time-budget=15000']
-    dom = subprocess.run([exe, *flags, '--dump-dom', url], capture_output=True, text=True,
-                         encoding='utf8', errors='replace', timeout=120).stdout
-    if CFG['tryhackme'].lower() not in dom.lower():
-        raise RuntimeError('TryHackMe badge did not load (blocked or changed)')
-    with tempfile.TemporaryDirectory() as tmp:
-        shot = os.path.join(tmp, 'thm.png')
-        subprocess.run([exe, *flags, '--window-size=400,172', '--force-device-scale-factor=2',
-                        f'--user-data-dir={os.path.join(tmp, "profile")}', f'--screenshot={shot}', url],
-                       capture_output=True, timeout=120)
-        png = open(shot, 'rb').read()
-    if png[:4] != bytes([0x89, 0x50, 0x4E, 0x47]):  # PNG signature
-        raise RuntimeError('TryHackMe screenshot failed')
-    bw, bh = int.from_bytes(png[16:20], 'big'), int.from_bytes(png[20:24], 'big')
-    w = THIRD - 32
-    h = bh * w / bw
-    c = Svg(THIRD, CTF_H, 'TryHackMe badge')
-    card(c, THIRD, CTF_H)
-    c.add(icon('flag', 16, 15, 15, SKY))
-    label(c, 37, 27, 'TRYHACKME')
-    top = 40
-    c.add(f'<defs><clipPath id="b"><rect x="16" y="{top}" width="{w}" height="{h:.2f}" rx="8"/></clipPath></defs>'
-          f'<image clip-path="url(#b)" x="16" y="{top}" width="{w}" height="{h:.2f}" '
-          f'href="data:image/png;base64,{base64.b64encode(png).decode()}"/>')
-    c.save('ctf-thm.svg')
-
-
 # ------------------------------------------------------------------ main
 def step(name, fn, *args):
     try:
@@ -560,7 +473,7 @@ def main():
     build_button('btn-thm.svg', 'flag', 'TryHackMe', True)
     build_button('btn-ptd.svg', 'swords', 'PwnTillDawn', False)
     build_button('btn-cylabs.svg', 'school', 'CyLab Academy', False)
-    for name, title in (('projects', 'Projects'), ('github', 'GitHub stats'), ('ctf', 'CTF and community')):
+    for name, title in (('projects', 'Projects'), ('github', 'GitHub stats')):
         build_section(f'sec-{name}.svg', title)
     build_footer()
 
@@ -573,8 +486,6 @@ def main():
     except Exception:
         traceback.print_exc()
         ok = False
-    for name, fn in (('pwntilldawn', build_ptd), ('cylabs', build_cylabs), ('tryhackme', build_thm)):
-        ok &= step(name, fn)
     print('done' if ok else 'done, with some sources skipped')
 
 

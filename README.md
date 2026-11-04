@@ -23,12 +23,4 @@
 
 <img src="./assets/activity.svg" width="100%" alt="Contribution heatmap and weekly activity graph for the last 12 months">
 
-<img src="./assets/sec-ctf.svg" width="100%" alt="CTF and community">
-
-<p>
-  <a href="https://tryhackme.com/p/SPRYZZEN"><img src="./assets/ctf-thm.svg" width="32%" alt="TryHackMe badge"></a>
-  <a href="https://online.pwntilldawn.com/Achievements/9259"><img src="./assets/ctf-ptd.svg" width="32%" alt="PwnTillDawn stats"></a>
-  <a href="https://learn.cylabacademy.org/users/spryzz3n"><img src="./assets/ctf-cylabs.svg" width="32%" alt="CyLab Academy stats"></a>
-</p>
-
 <img src="./assets/footer.svg" width="100%" alt="Open to security engineering and cloud security internships">

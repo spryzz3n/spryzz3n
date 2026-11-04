@@ -11,9 +11,5 @@
   ],
   "repos": ["ZeroTrace", "2Factor-Auth", "portfolio", "Bit-Alumni-Portfolio"],
   "repo_descriptions": {"2Factor-Auth": "2-factor authentication"},
-  "tryhackme": "SPRYZZEN",
-  "tryhackme_badge": "https://tryhackme.com/badge/t/fae7ffe29aa3a1998a2a86c87dc93b53ad4ac0adf855f58639711f43b2ebc5214c1d6a0a3a3090ea95445bb3377af339/embed?theme=dark",
-  "pwntilldawn": "https://online.pwntilldawn.com/Achievements/9259",
-  "cylabs": "spryzz3n",
   "footer": "Open to security engineering and cloud security internships"
 }
