@@ -9,7 +9,7 @@
     ["brand-golang", "Go"], ["brand-cpp", "C++"], ["terminal", "Bash"], ["brand-ubuntu", "Linux"],
     ["brand-docker", "Docker"], ["brand-aws", "AWS"], ["bug", "Burp Suite"], ["radar", "Nmap"]
   ],
-  "repos": ["ZeroTrace", "2Factor-Auth", "portfolio", "Bit-Alumni-Portfolio"],
+  "repos": ["PurgeMark", "2Factor-Auth", "portfolio", "Bit-Alumni-Portfolio"],
   "repo_descriptions": {"2Factor-Auth": "2-factor authentication"},
   "footer": "Open to security engineering and cloud security internships"
 }

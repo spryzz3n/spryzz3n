@@ -378,80 +378,48 @@ def smooth(points, floor):
 
 
 def build_activity(days):
-    # Group days into week columns (Sunday first), like GitHub does.
+    """Weekly contribution graph. The daily heatmap is left to GitHub's own profile."""
     weeks = []
-    for d, n, lv in days:
-        if not weeks or d.weekday() == 6:
+    for d, n, _ in days:
+        if not weeks or d.weekday() == 6:   # weeks start on Sunday, like GitHub's
             weeks.append([])
-        weeks[-1].append((d, n, lv))
+        weeks[-1].append((d, n))
 
-    cell, gap = 11, 3
-    grid_w = len(weeks) * (cell + gap) - gap
-    gx = P + (W - 2 * P - grid_w - 28) / 2 + 28   # leave room for weekday labels
-    gy = 66
-    chart_top, chart_h = gy + 7 * (cell + gap) + 30, 70
-    H = chart_top + chart_h + 46
-
-    total = sum(n for _, n, _ in days)
-    a = Svg(W, H, f'{total} contributions in the last year')
-    card(a, W, H, 14)
-    a.css = ('@keyframes in{from{opacity:0}to{opacity:1}}.c{animation:in .4s ease-out both}'
-             '@keyframes draw{to{stroke-dashoffset:0}}'
-             '.ln{stroke-dasharray:1;stroke-dashoffset:1;animation:draw 2.4s ease-out .6s both}'
-             '.ar{animation:in 1.2s ease-out 1.6s both}')
-    label(a, P, 30, 'CONTRIBUTIONS · LAST 12 MONTHS')
-    a.text(W - P, 30, f'{fmt(total)} total', 'm4', 11, MUTED, anchor='end')
-
-    # month labels
-    seen = None
-    for i, wk in enumerate(weeks):
-        m = wk[0][0].month
-        if m != seen and i < len(weeks) - 2:
-            a.text(gx + i * (cell + gap), gy - 10, wk[0][0].strftime('%b'), 's4', 10, FAINT)
-        seen = m
-    for row, name in ((1, 'Mon'), (3, 'Wed'), (5, 'Fri')):
-        a.text(gx - 8, gy + row * (cell + gap) + 9, name, 's4', 10, FAINT, anchor='end')
-
-    cells = []
-    for i, wk in enumerate(weeks):
-        for d, n, lv in wk:
-            r = (d.weekday() + 1) % 7
-            cells.append(f'<rect class="c" style="animation-delay:{i * 25}ms" x="{gx + i * (cell + gap)}" '
-                         f'y="{gy + r * (cell + gap)}" width="{cell}" height="{cell}" rx="2" fill="{HEAT[lv]}"/>')
-    a.add(''.join(cells))
-
-    # weekly area chart under the grid
-    weekly = [sum(n for _, n, _ in wk) for wk in weeks]
-    peak = max(weekly) or 1
-    label(a, P, chart_top - 8, 'WEEKLY')
-    pts = [(gx + i * (cell + gap) + cell / 2, chart_top + chart_h - 6 - (chart_h - 12) * v / peak)
-           for i, v in enumerate(weekly)]
-    line = smooth(pts, chart_top + chart_h - 6)
+    chart_top, chart_h = 58, 96
     base = chart_top + chart_h
+    H = base + 38
+    plot_w = W - 2 * P
+    weekly = [sum(n for _, n in wk) for wk in weeks]
+    peak = max(weekly) or 1
+
+    a = Svg(W, H, f'Weekly contributions over the last 12 months, peaking at {peak}')
+    card(a, W, H, 14)
+    a.css = ('@keyframes in{from{opacity:0}to{opacity:1}}'
+             '@keyframes draw{to{stroke-dashoffset:0}}'
+             '.ln{stroke-dasharray:1;stroke-dashoffset:1;animation:draw 2.4s ease-out .3s both}'
+             '.ar{animation:in 1.2s ease-out 1.3s both}')
+    label(a, P, 30, 'WEEKLY CONTRIBUTIONS')
+
+    zero = base - 6
+    pts = [(P + i * plot_w / (len(weekly) - 1), zero - (chart_h - 12) * v / peak) for i, v in enumerate(weekly)]
+    line = smooth(pts, zero)
     a.add(f'<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">'
           f'<stop offset="0" stop-color="{SKY2}" stop-opacity=".28"/>'
           f'<stop offset="1" stop-color="{SKY2}" stop-opacity="0"/></linearGradient></defs>')
     for k in (0.5, 1):
-        y = chart_top + chart_h - 6 - (chart_h - 12) * k
-        a.add(f'<rect x="{gx}" y="{y:.2f}" width="{grid_w}" height="0.5" fill="{BAND_LINE}"/>')
-    a.add(f'<rect x="{gx}" y="{base}" width="{grid_w}" height="0.5" fill="{RULE}"/>')
+        y = zero - (chart_h - 12) * k
+        a.add(f'<rect x="{P}" y="{y:.2f}" width="{plot_w}" height="0.5" fill="{BAND_LINE}"/>')
+    a.add(f'<rect x="{P}" y="{base}" width="{plot_w}" height="0.5" fill="{RULE}"/>')
     a.add(f'<path class="ar" d="{line} L{pts[-1][0]:.2f},{base} L{pts[0][0]:.2f},{base} Z" fill="url(#g)"/>')
     a.add(f'<path class="ln" pathLength="1" d="{line}" fill="none" stroke="{SKY2}" stroke-width="2" '
           f'stroke-linecap="round"/>')
-    pi = weekly.index(max(weekly))
     if max(weekly):
-        px, py = pts[pi]
+        px, py = pts[weekly.index(max(weekly))]
         a.add(f'<circle class="ar" cx="{px:.2f}" cy="{py:.2f}" r="3.5" fill="#fff" stroke="{SKY}" stroke-width="2"/>')
-        a.text(px, py - 9, f'{max(weekly)} peak', 'm4', 10, SKY, anchor='middle')
-    a.text(gx + grid_w, base + 18, f'{weeks[-1][0][0]:%b %d, %Y}', 's4', 10, FAINT, anchor='end')
-    a.text(gx, base + 18, f'{weeks[0][0][0]:%b %d, %Y}', 's4', 10, FAINT)
-
-    # legend
-    lx = W - P - 5 * (cell + 3) - 30
-    a.text(lx - 6, H - 14, 'Less', 's4', 10, FAINT, anchor='end')
-    for i, c in enumerate(HEAT):
-        a.add(f'<rect x="{lx + i * (cell + 3)}" y="{H - 23}" width="{cell}" height="{cell}" rx="2" fill="{c}"/>')
-    a.text(lx + 5 * (cell + 3) + 3, H - 14, 'More', 's4', 10, FAINT)
+        tx = min(max(px, P + 30), W - P - 30)   # keep the label inside the card
+        a.text(tx, py - 9, f'{max(weekly)} peak', 'm4', 10, SKY, anchor='middle')
+    a.text(P, base + 20, f'{weeks[0][0][0]:%b %d, %Y}', 's4', 10, FAINT)
+    a.text(W - P, base + 20, f'{weeks[-1][0][0]:%b %d, %Y}', 's4', 10, FAINT, anchor='end')
     a.save('activity.svg')
 
 
