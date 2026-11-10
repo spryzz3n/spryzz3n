@@ -56,6 +56,19 @@ def fit(text, font, size, max_w):
     return text.rstrip() + '…'
 
 
+def wrap(text, font, size, max_w, lines=2):
+    """Splits text into at most `lines` lines that fit max_w; the last one gets an ellipsis if cut."""
+    out, words = [], text.split()
+    while words and len(out) < lines:
+        line = words.pop(0)
+        while words and width(line + ' ' + words[0], font, size) <= max_w:
+            line += ' ' + words.pop(0)
+        out.append(line)
+    if words:
+        out[-1] = fit(out[-1] + ' ' + ' '.join(words), font, size, max_w)
+    return [fit(l, font, size, max_w) for l in out]
+
+
 def icon(name, x, y, size, color, sw=2):
     src = open(os.path.join(HERE, 'icons', name + '.svg'), encoding='utf8').read()
     body = src[src.index('>', src.index('<svg')) + 1:src.rindex('</svg>')]
@@ -270,8 +283,9 @@ def build_repos():
             # Not public yet: show a placeholder until it is.
             r = {'name': full.split('/')[1], 'description': 'Coming soon', 'language': None,
                  'stargazers_count': 0, 'pushed_at': None}
-        c = Svg(HALF, 100, f'{r["name"]}: {r["description"] or "repository"}')
-        card(c, HALF, 100)
+        CH = 118
+        c = Svg(HALF, CH, f'{r["name"]}: {r["description"] or "repository"}')
+        card(c, HALF, CH)
         c.add(icon('book-2', 16, 14, 16, SKY))
         tag_w = 0
         if not own:
@@ -283,17 +297,19 @@ def build_repos():
         title = r['name'] if own else f"{full.split('/')[0]}/{r['name']}"
         c.text(38, 27.5, fit(title, 's5', 14, HALF - 54 - tag_w - 8), 's5', 14)
         desc = CFG.get('repo_descriptions', {}).get(name) or CFG.get('repo_descriptions', {}).get(full) or r['description'] or 'No description yet'
-        c.text(16, 52, fit(desc, 's4', 12, HALF - 32), 's4', 12, MUTED)
+        for k, line in enumerate(wrap(desc, 's4', 12, HALF - 32)):
+            c.text(16, 52 + k * 17, line, 's4', 12, MUTED)
+        fy = CH - 18   # baseline of the bottom row
         x = 16
         if r['language']:
-            c.add(f'<circle cx="{x + 4}" cy="78" r="4" fill="{SKY2}"/>')
-            c.text(x + 13, 82, r['language'], 'm4', 11, SKY)
+            c.add(f'<circle cx="{x + 4}" cy="{fy - 4}" r="4" fill="{SKY2}"/>')
+            c.text(x + 13, fy, r['language'], 'm4', 11, SKY)
             x += 13 + width(r['language'], 'm4', 11) + 16
-        c.add(icon('star', x, 72, 13, FAINT, 2))
-        c.text(x + 17, 82, fmt(r['stargazers_count']), 'm4', 11, MUTED)
+        c.add(icon('star', x, fy - 10, 13, FAINT, 2))
+        c.text(x + 17, fy, fmt(r['stargazers_count']), 'm4', 11, MUTED)
         if r['pushed_at']:
             updated = dt.datetime.fromisoformat(r['pushed_at'].replace('Z', '+00:00'))
-            c.text(HALF - 16, 82, f'updated {updated:%b %Y}', 'm4', 11, FAINT, anchor='end')
+            c.text(HALF - 16, fy, f'updated {updated:%b %Y}', 'm4', 11, FAINT, anchor='end')
         c.save(f'repo-{i}.svg')
     if not ok:
         raise RuntimeError('some repos could not be fetched')
@@ -338,7 +354,9 @@ def build_stats(days):
 
     label(s, P, 124, 'TOP LANGUAGES')
     total = sum(langs.values()) or 1
-    top = langs.most_common(5)
+    pinned = [l for l in CFG.get('pin_languages', []) if langs.get(l)]   # always listed, even if small
+    top = [(l, b) for l, b in langs.most_common() if l not in pinned][:5 - len(pinned)]
+    top = sorted(top + [(l, langs[l]) for l in pinned], key=lambda t: -t[1])
     rest = total - sum(b for _, b in top)
     if rest > 0:
         top.append(('Other', rest))
@@ -377,50 +395,74 @@ def smooth(points, floor):
     return d
 
 
-def build_activity(days):
-    """Weekly contribution graph. The daily heatmap is left to GitHub's own profile."""
-    weeks = []
+def nice_max(v):
+    """Rounds the top of the y-axis up to a tidy number (5, 10, 20, 25, 50, ...)."""
+    for step in (5, 10, 20, 25, 50, 100, 200, 250, 500, 1000):
+        if v <= step * 4:
+            return max(step, -(-v // step) * step)
+    return v
+
+
+def build_monthly(days):
+    """Line graph of contributions per calendar month, last 12 months."""
+    per_month = Counter()
     for d, n, _ in days:
-        if not weeks or d.weekday() == 6:   # weeks start on Sunday, like GitHub's
-            weeks.append([])
-        weeks[-1].append((d, n))
+        per_month[(d.year, d.month)] += n
+    last = days[-1][0]
+    months, (y, m) = [], (last.year, last.month)
+    for _ in range(12):
+        months.append((y, m))
+        y, m = (y, m - 1) if m > 1 else (y - 1, 12)
+    months.reverse()
+    values = [per_month[k] for k in months]
+    best = max(values)
+    top = nice_max(best or 1)
 
-    chart_top, chart_h = 58, 96
+    axis_w = 30                          # room for y-axis numbers
+    x0, x1 = P + axis_w + 14, W - P - 14
+    chart_top, chart_h = 70, 130
     base = chart_top + chart_h
-    H = base + 38
-    plot_w = W - 2 * P
-    weekly = [sum(n for _, n in wk) for wk in weeks]
-    peak = max(weekly) or 1
+    H = base + 54
 
-    a = Svg(W, H, f'Weekly contributions over the last 12 months, peaking at {peak}')
+    a = Svg(W, H, 'Contributions per month: ' +
+            ', '.join(f'{dt.date(y, m, 1):%b %Y} {v}' for (y, m), v in zip(months, values)))
     card(a, W, H, 14)
     a.css = ('@keyframes in{from{opacity:0}to{opacity:1}}'
              '@keyframes draw{to{stroke-dashoffset:0}}'
-             '.ln{stroke-dasharray:1;stroke-dashoffset:1;animation:draw 2.4s ease-out .3s both}'
-             '.ar{animation:in 1.2s ease-out 1.3s both}')
-    label(a, P, 30, 'WEEKLY CONTRIBUTIONS')
+             '.ln{stroke-dasharray:1;stroke-dashoffset:1;animation:draw 2s ease-out .2s both}'
+             '.ar{animation:in 1s ease-out 1.2s both}.v{animation:in .5s ease-out both}')
+    label(a, P, 30, 'CONTRIBUTIONS PER MONTH')
+    a.text(W - P, 30, f'{fmt(sum(values))} in the last 12 months', 'm4', 11, MUTED, anchor='end')
 
-    zero = base - 6
-    pts = [(P + i * plot_w / (len(weekly) - 1), zero - (chart_h - 12) * v / peak) for i, v in enumerate(weekly)]
-    line = smooth(pts, zero)
+    yv = lambda v: base - chart_h * v / top
+    for k in range(5):                   # grid lines with their values
+        v = top * k / 4
+        a.add(f'<rect x="{x0 - 14}" y="{yv(v):.2f}" width="{x1 - x0 + 28}" height="{1 if k == 0 else 0.5}" '
+              f'fill="{RULE if k == 0 else BAND_LINE}"/>')
+        a.text(P + axis_w, yv(v) + 3.5, fmt(int(v)), 'm4', 10, FAINT, anchor='end')
+
+    step = (x1 - x0) / 11
+    pts = [(x0 + i * step, yv(v)) for i, v in enumerate(values)]
+    line = smooth(pts, base)
     a.add(f'<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">'
-          f'<stop offset="0" stop-color="{SKY2}" stop-opacity=".28"/>'
+          f'<stop offset="0" stop-color="{SKY2}" stop-opacity=".30"/>'
           f'<stop offset="1" stop-color="{SKY2}" stop-opacity="0"/></linearGradient></defs>')
-    for k in (0.5, 1):
-        y = zero - (chart_h - 12) * k
-        a.add(f'<rect x="{P}" y="{y:.2f}" width="{plot_w}" height="0.5" fill="{BAND_LINE}"/>')
-    a.add(f'<rect x="{P}" y="{base}" width="{plot_w}" height="0.5" fill="{RULE}"/>')
     a.add(f'<path class="ar" d="{line} L{pts[-1][0]:.2f},{base} L{pts[0][0]:.2f},{base} Z" fill="url(#g)"/>')
-    a.add(f'<path class="ln" pathLength="1" d="{line}" fill="none" stroke="{SKY2}" stroke-width="2" '
-          f'stroke-linecap="round"/>')
-    if max(weekly):
-        px, py = pts[weekly.index(max(weekly))]
-        a.add(f'<circle class="ar" cx="{px:.2f}" cy="{py:.2f}" r="3.5" fill="#fff" stroke="{SKY}" stroke-width="2"/>')
-        tx = min(max(px, P + 30), W - P - 30)   # keep the label inside the card
-        a.text(tx, py - 9, f'{max(weekly)} peak', 'm4', 10, SKY, anchor='middle')
-    a.text(P, base + 20, f'{weeks[0][0][0]:%b %d, %Y}', 's4', 10, FAINT)
-    a.text(W - P, base + 20, f'{weeks[-1][0][0]:%b %d, %Y}', 's4', 10, FAINT, anchor='end')
-    a.save('activity.svg')
+    a.add(f'<path class="ln" pathLength="1" d="{line}" fill="none" stroke="{SKY2}" stroke-width="2.25" '
+          f'stroke-linecap="round" stroke-linejoin="round"/>')
+
+    for i, ((y, m), v, (px, py)) in enumerate(zip(months, values, pts)):
+        delay = f' style="animation-delay:{400 + i * 130}ms"'
+        is_best = v == best and v > 0
+        a.add(f'<circle class="v"{delay} cx="{px:.2f}" cy="{py:.2f}" r="{4.5 if is_best else 3.5}" fill="#fff" '
+              f'stroke="{SKY if is_best else SKY2}" stroke-width="2"/>')
+        a.text(px, py - 10, fmt(v), 'm5' if is_best else 'm4', 11, SKY if is_best else (MUTED if v else FAINT),
+               anchor='middle', extra=f' class="v"{delay}')
+        a.text(px, base + 18, f'{dt.date(y, m, 1):%b}', 's4', 11, NAVY if is_best else MUTED, anchor='middle')
+        if m == 1 or i == 0:
+            a.text(px, base + 32, str(y), 'm4', 10, FAINT, anchor='middle')
+    a.text(W - P, H - 12, 'each point = one month', 's4', 10, FAINT, anchor='end')
+    a.save('monthly.svg')
 
 
 # ------------------------------------------------------------------ main
@@ -450,7 +492,7 @@ def main():
     try:
         days = contributions(CFG['github'])
         ok &= step('stats', build_stats, days)
-        ok &= step('activity', build_activity, days)
+        ok &= step('monthly', build_monthly, days)
     except Exception:
         traceback.print_exc()
         ok = False

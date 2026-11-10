@@ -1,15 +1,15 @@
 {
   "github": "spryzz3n",
   "name": "spryzen",
-  "role": "Cybersecurity and Cloud Security Engineer",
+  "role": "Focused on offensive security and secure cloud systems",
   "typing": ["Penetration testing", "Network and cloud security", "Building tools in Go and C++"],
   "focus": "Network security, cloud security, DevSecOps",
   "studying": "B.Tech, AI and Machine Learning",
   "stack": [
     ["brand-golang", "Go"], ["brand-cpp", "C++"], ["terminal", "Bash"], ["brand-ubuntu", "Linux"],
-    ["brand-docker", "Docker"], ["brand-aws", "AWS"], ["bug", "Burp Suite"], ["radar", "Nmap"]
+    ["brand-python", "Python"], ["brand-docker", "Docker"], ["brand-aws", "AWS"], ["bug", "Burp Suite"], ["radar", "Nmap"]
   ],
-  "repos": ["PurgeMark", "2Factor-Auth", "portfolio", "Bit-Alumni-Portfolio"],
-  "repo_descriptions": {"2Factor-Auth": "2-factor authentication"},
+  "repos": ["PurgeMark", "IndexCase"],
+  "pin_languages": ["Python"],
   "footer": "Open to security engineering and cloud security internships"
 }
