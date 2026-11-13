@@ -1,4 +1,4 @@
-<!-- The images in assets/ are built by scripts/build.py and refreshed every 6 hours by .github/workflows/refresh.yml. Edit scripts/config.json, not the SVGs. -->
+<!-- The images in assets/ are built by scripts/build.py and refreshed every hour by .github/workflows/refresh.yml. Edit scripts/config.json, not the SVGs. -->
 
 <img src="./assets/hero.svg" width="100%" alt="spryzen, focused on offensive security and secure cloud systems. Focus: network security, cloud security, DevSecOps. Studying B.Tech, AI and Machine Learning. Core stack: Go, C++, Bash, Linux, Python, Docker, AWS, Burp Suite, Nmap.">
 
@@ -19,6 +19,6 @@
 
 <img src="./assets/stats.svg" width="100%" alt="GitHub stats: contributions, commits, repos, active days, longest streak and top languages">
 
-<img src="./assets/monthly.svg" width="100%" alt="Bar chart of contributions per month for the last 12 months">
+<img src="./assets/monthly.svg" width="100%" alt="Line graph of contributions per month for the last 12 months">
 
-<img src="./assets/footer.svg" width="100%" alt="Open to security engineering and cloud security internships">
+<img src="./assets/footer.svg" width="100%" alt="Open to security engineering and cloud security internships. Shows when the stats were last updated.">

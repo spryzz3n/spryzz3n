@@ -77,6 +77,9 @@ def icon(name, x, y, size, color, sw=2):
             f'stroke="{color}" stroke-width="{sw}" stroke-linecap="round" stroke-linejoin="round">{body}</g>')
 
 
+CHANGED = set()   # images whose content changed during this run
+
+
 class Svg:
     def __init__(self, w, h, title):
         self.w, self.h, self.title, self.parts, self.used, self.css = w, h, title, [], {}, ''
@@ -117,9 +120,13 @@ class Svg:
                f'viewBox="0 0 {self.w} {self.h}" role="img" aria-label="{escape(self.title)}">'
                f'<title>{escape(self.title)}</title><style>{self._fonts()}{self.css}</style>'
                + ''.join(self.parts) + '</svg>')
-        with open(os.path.join(OUT, name), 'w', encoding='utf8', newline='\n') as fh:
+        path = os.path.join(OUT, name)
+        old = open(path, encoding='utf8').read() if os.path.exists(path) else None
+        if old != doc:
+            CHANGED.add(name)
+        with open(path, 'w', encoding='utf8', newline='\n') as fh:
             fh.write(doc)
-        print(f'  wrote {name} ({len(doc) // 1024} KB)')
+        print(f'  wrote {name} ({len(doc) // 1024} KB){"" if old != doc else ", unchanged"}')
 
 
 def card(svg, w, h, r=12):
@@ -260,9 +267,18 @@ def build_section(name, title):
     s.save(name)
 
 
+STAMP = os.path.join(OUT, '.updated')   # when the live cards last changed, as a UTC ISO time
+
+
 def build_footer():
+    # Footer line, with the time the stats last changed on the right.
     f = Svg(W, 20, CFG['footer'])
     f.text(0, 14, CFG['footer'], 'm4', 11, FAINT)
+    if os.path.exists(STAMP):
+        tz = CFG.get('timezone', {'name': 'UTC', 'utc_offset_hours': 0})
+        when = dt.datetime.fromisoformat(open(STAMP, encoding='utf8').read().strip()).astimezone(
+            dt.timezone(dt.timedelta(hours=tz['utc_offset_hours'])))
+        f.text(W, 14, f'stats updated {when:%d %b %Y, %H:%M} {tz["name"]}', 'm4', 11, FAINT, anchor='end')
     f.save('footer.svg')
 
 
@@ -305,8 +321,9 @@ def build_repos():
             c.add(f'<circle cx="{x + 4}" cy="{fy - 4}" r="4" fill="{SKY2}"/>')
             c.text(x + 13, fy, r['language'], 'm4', 11, SKY)
             x += 13 + width(r['language'], 'm4', 11) + 16
-        c.add(icon('star', x, fy - 10, 13, FAINT, 2))
-        c.text(x + 17, fy, fmt(r['stargazers_count']), 'm4', 11, MUTED)
+        if r['stargazers_count']:   # only once the repo has stars
+            c.add(icon('star', x, fy - 10, 13, FAINT, 2))
+            c.text(x + 17, fy, fmt(r['stargazers_count']), 'm4', 11, MUTED)
         if r['pushed_at']:
             updated = dt.datetime.fromisoformat(r['pushed_at'].replace('Z', '+00:00'))
             c.text(HALF - 16, fy, f'updated {updated:%b %Y}', 'm4', 11, FAINT, anchor='end')
@@ -485,9 +502,9 @@ def main():
     build_button('btn-cylabs.svg', 'school', 'CyLab Academy', False)
     for name, title in (('projects', 'Projects'), ('github', 'GitHub stats')):
         build_section(f'sec-{name}.svg', title)
-    build_footer()
 
     print('live')
+    CHANGED.clear()
     ok = step('repos', build_repos)
     try:
         days = contributions(CFG['github'])
@@ -496,6 +513,14 @@ def main():
     except Exception:
         traceback.print_exc()
         ok = False
+
+    # Only move the "stats updated" time when a live card really changed, so the
+    # hourly job doesn't commit a new timestamp when nothing else is different.
+    if CHANGED or not os.path.exists(STAMP):
+        with open(STAMP, 'w', encoding='utf8', newline='\n') as fh:
+            fh.write(dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat() + '\n')
+        print(f'  stats changed ({", ".join(sorted(CHANGED)) or "first run"}), new timestamp')
+    build_footer()
     print('done' if ok else 'done, with some sources skipped')
 
 

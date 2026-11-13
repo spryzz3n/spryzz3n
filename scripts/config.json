@@ -11,5 +11,6 @@
   ],
   "repos": ["PurgeMark", "IndexCase"],
   "pin_languages": ["Python"],
+  "timezone": {"name": "IST", "utc_offset_hours": 5.5},
   "footer": "Open to security engineering and cloud security internships"
 }
