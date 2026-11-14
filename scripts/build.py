@@ -278,7 +278,7 @@ def build_footer():
         tz = CFG.get('timezone', {'name': 'UTC', 'utc_offset_hours': 0})
         when = dt.datetime.fromisoformat(open(STAMP, encoding='utf8').read().strip()).astimezone(
             dt.timezone(dt.timedelta(hours=tz['utc_offset_hours'])))
-        f.text(W, 14, f'stats updated {when:%d %b %Y, %H:%M} {tz["name"]}', 'm4', 11, FAINT, anchor='end')
+        f.text(W, 14, f'last refreshed {when:%d %b %Y, %H:%M} {tz["name"]}', 'm4', 11, FAINT, anchor='end')
     f.save('footer.svg')
 
 
@@ -514,12 +514,14 @@ def main():
         traceback.print_exc()
         ok = False
 
-    # Only move the "stats updated" time when a live card really changed, so the
-    # hourly job doesn't commit a new timestamp when nothing else is different.
-    if CHANGED or not os.path.exists(STAMP):
+    # "Last refreshed" = the last run that fetched every source. A run that
+    # failed somewhere keeps the old time, so it never claims a refresh it didn't do.
+    if ok or not os.path.exists(STAMP):
         with open(STAMP, 'w', encoding='utf8', newline='\n') as fh:
             fh.write(dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat() + '\n')
-        print(f'  stats changed ({", ".join(sorted(CHANGED)) or "first run"}), new timestamp')
+        print('  refreshed, new timestamp')
+    else:
+        print('  ! some sources failed, keeping the previous timestamp')
     build_footer()
     print('done' if ok else 'done, with some sources skipped')
 

@@ -21,4 +21,4 @@
 
 <img src="./assets/monthly.svg" width="100%" alt="Line graph of contributions per month for the last 12 months">
 
-<img src="./assets/footer.svg" width="100%" alt="Open to security engineering and cloud security internships. Shows when the stats were last updated.">
+<img src="./assets/footer.svg" width="100%" alt="Open to security engineering and cloud security internships. Shows when the stats were last refreshed.">
