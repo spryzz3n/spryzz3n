@@ -333,43 +333,8 @@ def build_repos():
 
 
 # ------------------------------------------------------------------ live: GitHub stats
-def streaks(days):
-    longest = cur = 0
-    for _, n, _ in days:
-        cur = cur + 1 if n else 0
-        longest = max(longest, cur)
-    return longest
-
-
-def build_stats(days):
-    user = CFG['github']
-    repos = [r for r in gh(f'/users/{user}/repos?per_page=100&type=owner')
-             if not r['fork'] and r['name'].lower() != user.lower()]
-    langs = Counter()
-    for r in repos:
-        langs.update(gh(f'/repos/{user}/{r["name"]}/languages'))
-    commits = gh(f'/search/commits?q=author:{user}&per_page=1')['total_count']
-
-    metrics = [
-        ('activity', fmt(sum(n for _, n, _ in days)), 'contributions, last year'),
-        ('git-commit', fmt(commits), 'public commits'),
-        ('book-2', fmt(len(repos)), 'public repos'),
-        ('calendar-event', fmt(sum(1 for _, n, _ in days if n)), 'active days'),
-        ('flame', fmt(streaks(days)), 'longest streak (days)'),
-    ]
-    H = 196
-    s = Svg(W, H, 'GitHub stats: ' + ', '.join(f'{v} {l}' for _, v, l in metrics))
-    card(s, W, H, 14)
-    col = (W - 2 * P) / len(metrics)
-    for i, (ic, value, cap) in enumerate(metrics):
-        x = P + i * col
-        s.add(icon(ic, x, 24, 16, SKY))
-        s.text(x, 66, value, 's5', 24)
-        s.text(x, 86, cap, 's4', 11, MUTED)
-        if i:
-            s.add(f'<rect x="{x - 14:.2f}" y="26" width="0.5" height="60" fill="{RULE}"/>')
-
-    label(s, P, 124, 'TOP LANGUAGES')
+def top_languages(langs):
+    """Up to 5 languages (pinned ones always included) plus 'Other', biggest first."""
     total = sum(langs.values()) or 1
     pinned = [l for l in CFG.get('pin_languages', []) if langs.get(l)]   # always listed, even if small
     top = [(l, b) for l, b in langs.most_common() if l not in pinned][:5 - len(pinned)]
@@ -377,27 +342,7 @@ def build_stats(days):
     rest = total - sum(b for _, b in top)
     if rest > 0:
         top.append(('Other', rest))
-    bar_w, x = W - 2 * P, P
-    s.add(f'<defs><clipPath id="bar"><rect x="{P}" y="136" width="{bar_w}" height="10" rx="5"/></clipPath></defs>')
-    s.css = ('@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}'
-             f'.bar{{transform-origin:{P}px 0;animation:grow 1.2s cubic-bezier(.2,.7,.2,1) both}}')
-    segs = ''
-    for i, (_, b) in enumerate(top):
-        w = bar_w * b / total
-        segs += f'<rect x="{x:.2f}" y="136" width="{w + .5:.2f}" height="10" fill="{LANG[i]}"/>'
-        x += w
-    s.add(f'<g clip-path="url(#bar)"><rect x="{P}" y="136" width="{bar_w}" height="10" fill="{HEAT[0]}"/>'
-          f'<g class="bar">{segs}</g></g>')
-    x = P
-    for i, (name, b) in enumerate(top):
-        pct = f'{100 * b / total:.1f}%'
-        s.add(f'<circle cx="{x + 4}" cy="170" r="4" fill="{LANG[i]}"' +
-              (f' stroke="{PILL_LINE}" stroke-width="0.5"' if i >= 4 else '') + '/>')
-        s.text(x + 13, 174, name, 's4', 12)
-        nx = x + 13 + width(name, 's4', 12) + 5
-        s.text(nx, 174, pct, 'm4', 11, FAINT)
-        x = nx + width(pct, 'm4', 11) + 20
-    s.save('stats.svg')
+    return top, total
 
 
 def smooth(points, floor):
@@ -420,8 +365,16 @@ def nice_max(v):
     return v
 
 
-def build_monthly(days):
-    """Line graph of contributions per calendar month, last 12 months."""
+def build_github(days):
+    """One card: contributions and commits, top languages, and the per-month graph."""
+    user = CFG['github']
+    repos = [r for r in gh(f'/users/{user}/repos?per_page=100&type=owner')
+             if not r['fork'] and r['name'].lower() != user.lower()]
+    langs = Counter()
+    for r in repos:
+        langs.update(gh(f'/repos/{user}/{r["name"]}/languages'))
+    commits = gh(f'/search/commits?q=author:{user}&per_page=1')['total_count']
+
     per_month = Counter()
     for d, n, _ in days:
         per_month[(d.year, d.month)] += n
@@ -435,21 +388,70 @@ def build_monthly(days):
     best = max(values)
     top = nice_max(best or 1)
 
+    metrics = [
+        ('activity', fmt(sum(n for _, n, _ in days)), 'contributions, last year'),
+        ('git-commit', fmt(commits), 'public commits'),
+    ]
+    tl, total = top_languages(langs)
+
     axis_w = 30                          # room for y-axis numbers
     x0, x1 = P + axis_w + 14, W - P - 14
-    chart_top, chart_h = 70, 130
+    graph_y = 118                        # top of the graph section
+    chart_top, chart_h = graph_y + 46, 96
     base = chart_top + chart_h
-    H = base + 54
+    H = base + 46
 
-    a = Svg(W, H, 'Contributions per month: ' +
+    a = Svg(W, H, 'GitHub stats: ' + ', '.join(f'{v} {l}' for _, v, l in metrics) + '. Top languages: ' +
+            ', '.join(f'{n} {100 * b / total:.1f}%' for n, b in tl) + '. Contributions per month: ' +
             ', '.join(f'{dt.date(y, m, 1):%b %Y} {v}' for (y, m), v in zip(months, values)))
     card(a, W, H, 14)
     a.css = ('@keyframes in{from{opacity:0}to{opacity:1}}'
              '@keyframes draw{to{stroke-dashoffset:0}}'
+             '@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}'
              '.ln{stroke-dasharray:1;stroke-dashoffset:1;animation:draw 2s ease-out .2s both}'
              '.ar{animation:in 1s ease-out 1.2s both}.v{animation:in .5s ease-out both}')
-    label(a, P, 30, 'CONTRIBUTIONS PER MONTH')
-    a.text(W - P, 30, f'{fmt(sum(values))} in the last 12 months', 'm4', 11, MUTED, anchor='end')
+
+    # Top-left: the two numbers.
+    x = P
+    for i, (ic, value, cap) in enumerate(metrics):
+        if i:
+            a.add(f'<rect x="{x - 20:.2f}" y="26" width="0.5" height="60" fill="{RULE}"/>')
+        a.add(icon(ic, x, 24, 16, SKY))
+        a.text(x, 66, value, 's5', 24)
+        a.text(x, 86, cap, 's4', 11, MUTED)
+        x += max(width(value, 's5', 24), width(cap, 's4', 11)) + 30
+
+    # Top-right: language bar and legend.
+    lx = x + 6
+    a.add(f'<rect x="{lx - 30:.2f}" y="26" width="0.5" height="60" fill="{RULE}"/>')
+    label(a, lx, 32, 'TOP LANGUAGES')
+    bar_w, bx = W - P - lx, lx
+    a.css += f'.bar{{transform-origin:{lx:.2f}px 0;animation:grow 1.2s cubic-bezier(.2,.7,.2,1) both}}'
+    a.add(f'<defs><clipPath id="bar"><rect x="{lx:.2f}" y="44" width="{bar_w:.2f}" height="10" rx="5"/></clipPath></defs>')
+    segs = ''
+    for i, (_, b) in enumerate(tl):
+        w = bar_w * b / total
+        segs += f'<rect x="{bx:.2f}" y="44" width="{w + .5:.2f}" height="10" fill="{LANG[i]}"/>'
+        bx += w
+    a.add(f'<g clip-path="url(#bar)"><rect x="{lx:.2f}" y="44" width="{bar_w:.2f}" height="10" fill="{HEAT[0]}"/>'
+          f'<g class="bar">{segs}</g></g>')
+    x, ly = lx, 76
+    for i, (name, b) in enumerate(tl):
+        pct = f'{100 * b / total:.1f}%'
+        item_w = 13 + width(name, 's4', 11.5) + 5 + width(pct, 'm4', 10.5)
+        if x > lx and x + item_w > W - P:   # wrap the legend onto a second line
+            x, ly = lx, ly + 18
+        a.add(f'<circle cx="{x + 4:.2f}" cy="{ly - 4}" r="4" fill="{LANG[i]}"' +
+              (f' stroke="{PILL_LINE}" stroke-width="0.5"' if i >= 4 else '') + '/>')
+        a.text(x + 13, ly, name, 's4', 11.5)
+        nx = x + 13 + width(name, 's4', 11.5) + 5
+        a.text(nx, ly, pct, 'm4', 10.5, FAINT)
+        x = nx + width(pct, 'm4', 10.5) + 11
+
+    # Bottom: contributions per month.
+    a.add(f'<rect x="{P}" y="{graph_y - 14}" width="{W - 2 * P}" height="0.5" fill="{RULE}"/>')
+    label(a, P, graph_y + 12, 'CONTRIBUTIONS PER MONTH')
+    a.text(W - P, graph_y + 12, f'{fmt(sum(values))} in the last 12 months', 'm4', 11, MUTED, anchor='end')
 
     yv = lambda v: base - chart_h * v / top
     for k in range(5):                   # grid lines with their values
@@ -479,7 +481,7 @@ def build_monthly(days):
         if m == 1 or i == 0:
             a.text(px, base + 32, str(y), 'm4', 10, FAINT, anchor='middle')
     a.text(W - P, H - 12, 'each point = one month', 's4', 10, FAINT, anchor='end')
-    a.save('monthly.svg')
+    a.save('github.svg')
 
 
 # ------------------------------------------------------------------ main
@@ -508,8 +510,7 @@ def main():
     ok = step('repos', build_repos)
     try:
         days = contributions(CFG['github'])
-        ok &= step('stats', build_stats, days)
-        ok &= step('monthly', build_monthly, days)
+        ok &= step('github', build_github, days)
     except Exception:
         traceback.print_exc()
         ok = False

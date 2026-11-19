@@ -17,8 +17,6 @@
 
 <img src="./assets/sec-github.svg" width="100%" alt="GitHub stats">
 
-<img src="./assets/stats.svg" width="100%" alt="GitHub stats: contributions, commits, repos, active days, longest streak and top languages">
-
-<img src="./assets/monthly.svg" width="100%" alt="Line graph of contributions per month for the last 12 months">
+<img src="./assets/github.svg" width="100%" alt="GitHub stats: contributions and public commits, top languages, and a line graph of contributions per month for the last 12 months">
 
 <img src="./assets/footer.svg" width="100%" alt="Open to security engineering and cloud security internships. Shows when the stats were last refreshed.">
